@@ -1,0 +1,94 @@
+name: answer-quiz-backup
+# Answers each new quiz round on GitHub's servers within minutes of release, with
+# no laptop or Claude session involved. GitHub's cron is heavily throttled, so each
+# run stays alive for ~5h40m polling every 4 minutes and queues its own successor.
+# answer.yml is an identical first chain, so one failed restart can't stop
+# the answers. Both stop on their own once round 168 is in.
+on:
+  schedule:
+    - cron: "15,45 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.github/workflows/answer-backup.yml]
+permissions:
+  contents: write
+  actions: write
+concurrency:
+  group: answer-quiz-backup
+  cancel-in-progress: false
+env:
+  WORKFLOW_FILE: answer-backup.yml
+  LAST_ROUND_FILE: answers/round-0168.json
+  WIND_DOWN: "2026-10-23T00:00:00Z"  # stop once round 168 is in and this has passed
+  HARD_STOP: "2026-10-24T00:00:00Z"  # stop regardless
+  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+jobs:
+  answer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Define helpers
+        run: |
+          cat > "$RUNNER_TEMP/helpers.sh" <<'EOF'
+          finished() {
+            now=$(date +%s)
+            [ "$now" -ge "$(date -u -d "$HARD_STOP" +%s)" ] && return 0
+            git fetch -q origin main 2>/dev/null || true
+            git cat-file -e "origin/main:$LAST_ROUND_FILE" 2>/dev/null && [ "$now" -ge "$(date -u -d "$WIND_DOWN" +%s)" ]
+          }
+          queue_next() {
+            if finished; then echo "assignment over, not queuing another run"; return 0; fi
+            for i in 1 2 3 4 5 6; do
+              code=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+                -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$WORKFLOW_FILE/dispatches" \
+                -d '{"ref":"main"}' || true)
+              if [ "$code" = 204 ]; then echo "queued the next run"; return 0; fi
+              echo "dispatch attempt $i returned HTTP $code"; sleep 20
+            done
+            echo "::error::could not queue the next run"; return 1
+          }
+          EOF
+      - name: Queue a successor now, in case this runner dies
+        continue-on-error: true
+        run: |
+          . "$RUNNER_TEMP/helpers.sh"
+          queue_next
+      - name: Poll and answer new rounds
+        run: |
+          . "$RUNNER_TEMP/helpers.sh"
+          git config user.name "quiz-bot"
+          git config user.email "quiz-bot@users.noreply.github.com"
+          stop=$(( $(date +%s) + 340*60 ))
+          while [ "$(date +%s)" -lt "$stop" ] && ! finished; do
+            echo "=== $(date -u +%FT%TZ)"
+            pause=240
+            git reset -q --hard origin/main
+            python3 run.py || echo "::warning::run.py failed"
+            git add answers
+            if ! git diff --cached --quiet; then
+              git commit -q -m "Answer new rounds"
+              if git push -q origin HEAD:main; then echo "pushed answers"; else echo "push rejected, retrying shortly"; pause=20; fi
+            fi
+            if [ "$pause" = 240 ]; then
+              python3 status.py --write >/dev/null || echo "::warning::status.py failed"
+              if [ -n "$(git status --porcelain -- STATUS.md)" ]; then
+                git add STATUS.md
+                git commit -q -m "Update status"
+                git push -q origin HEAD:main || echo "status push rejected"
+              fi
+            fi
+            sleep "$pause"
+          done
+      - name: Queue the next run
+        if: always()
+        run: |
+          . "$RUNNER_TEMP/helpers.sh"
+          queue_next
