@@ -73,7 +73,10 @@ def compute(q):
 def solve(q, options):
     """Pick the option letter closest to the computed value. Returns (letter, confident)."""
     letters = "ABCD"
-    v = compute(q)
+    try:
+        v = compute(q)
+    except Exception:  # unexpected wording; never let one question stop the round
+        return None, False
     if v is None:
         return None, False
     if isinstance(v, date):
