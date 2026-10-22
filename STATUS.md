@@ -5,7 +5,7 @@ Rows pushed by `github-actions[bot]` were answered and pushed by the cloud job, 
 
 - Newest round released: **163** · newest answer file on GitHub: **163**
 - Graded rounds released: **115 of 120**
-- Within 3 hours (full credit): **33** · partial credit: **9** · zero credit: **72** · waiting: **1**
+- Within 3 hours (full credit): **34** · partial credit: **9** · zero credit: **72** · waiting: **0**
 - Best possible final grade (every answer correct, every remaining round on time, lowest 6 dropped): **38.2%**
 
 ## Needs attention
@@ -16,7 +16,7 @@ Nothing.
 
 | Round | Released | Graded push | Pushed by | After release | Timing credit |
 |---|---|---|---|---|---|
-| 163 | Oct 22 8:01 AM | on main, waiting for GitHub's push record | | | |
+| 163 | Oct 22 8:01 AM | Oct 22 8:04 AM | github-actions[bot] | 0 h 02 m | 100% |
 | 162 | Oct 22 7:01 AM | Oct 22 7:02 AM | github-actions[bot] | 0 h 00 m | 100% |
 | 161 | Oct 22 6:01 AM | Oct 22 6:03 AM | github-actions[bot] | 0 h 02 m | 100% |
 | 160 | Oct 22 5:01 AM | Oct 22 5:05 AM | github-actions[bot] | 0 h 03 m | 100% |
